@@ -1,0 +1,64 @@
+const mongoose = require('mongoose');
+const validator = require('validator');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+const userschema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: [true, 'name is mandatory'],
+        unique : true
+    },
+    date: {
+        type: Number,
+        required: [true, 'date of event is mandatrory']
+    },
+    time: {
+        type: Number,
+        required: [true, 'time of event in 24hrs format is mandatrory']
+    },
+    description: {
+        type: String,
+        required: [true, "Provide description of the event created"]
+    },
+    participantlist: {
+        type: String,
+        required: [true, "Enter the participants for the event"]
+    },
+    email:{
+        type: String,
+        required: [true, "Provide the email of the user"],
+        unique : true
+    },
+    password: {
+        type: String,
+        required: [true, 'Please provide a password'],
+        minlength: 8
+    }
+});
+
+userschema.pre('save', async function(next) {
+    // Only run this function if password was actually modified
+    if (!this.isModified('password')) return next();
+  
+    // Hash the password with cost of 12
+    this.password = await bcrypt.hash(this.password, 10);
+  
+    // Delete passwordConfirm field
+    this.passwordConfirm = undefined;
+    next();
+});
+
+//check if login pw is same as from signup--returns boolean
+userschema.methods.correctPassword = async function(candidatePassword,userPassword) 
+{
+    return await bcrypt.compare(candidatePassword, userPassword);
+};
+
+const userinfo = mongoose.model('userinfo', userschema);
+module.exports = userinfo;
+
+
+
+
+

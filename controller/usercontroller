@@ -1,0 +1,132 @@
+const userinfo = require('./../models/usermodel');
+const jwt = require('jsonwebtoken');
+const mailcontrol = require('./../controller/mailcontrol');
+const { promisify } = require('util');
+const axios = require('axios');
+
+const jwtoken = id => {
+    return jwt.sign({id}, 'event-manager-secret');
+
+};
+
+exports.signup = async(req,res) => {
+    try {
+    const testinfo = await userinfo.create(req.body);
+    const token = jwtoken(testinfo._id);
+    res.status(201).json({                 
+        status:'success', 
+        token,
+        data : {
+            userdetails: testinfo
+        }});
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: err
+        });
+    }
+};
+
+exports.login = async (req,res) => {
+    try{
+    const username = req.body.name;
+    const pwd = req.body.password;
+    // 1) Check if user and password exist
+    if (!username || !pwd) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'enter username & password'
+        });
+    }
+    // 2) Check if user exists && password is correct
+    const user = await userinfo.findOne({name: username}).select('+password');
+    const checkpw = await user.correctPassword(pwd,user.password);
+    if (!user.name || !checkpw) {
+        return res.status(401).json({
+            status: 'fail',
+            message: 'enter valid username & password'
+        });
+      }
+    // 3) If everything ok, send token to client
+    const token = jwtoken(user._id);
+    res.status(201).json({                 
+        status:'success', 
+        token
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: 'LOGIN FAILED'
+        });
+    }
+};
+
+exports.protect = async (req, res, next) => {
+    try {
+    // 1) Getting token and check if it's there
+    let token;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'YOU ARE NOT LOGGED IN'
+    });
+    }
+    // 2) Verification token
+    const verifiedtoken = await promisify(jwt.verify)(token, 'event-manager-secret');
+    const currentUser = await userinfo.findById(verifiedtoken.id);
+    // GRANT ACCESS TO PROTECTED ROUTE
+    req.user = currentUser;
+    next();
+    } catch (err) {
+        res.status(401).json({
+            status: 'fail',
+            message: 'INVALID TOKEN. LOGIN AGAIN'
+        });
+    }
+};
+
+exports.getpreference = async(req,res) => {
+    try {
+    const alluser = await userinfo.findById(req.user.id);
+    res.status(200).json({                 
+        status:'success', 
+        data : {
+            alluser
+        }});
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: err
+        });
+    }
+};
+
+exports.postnewevent = async(req,res) => {
+    try {
+        const idd = req.params.id;
+        if (idd == req.user.id) {
+            const alluser = await userinfo.findByIdAndUpdate(req.user.id, req.body, {
+                new: true, runValidators: true
+                });
+        }
+        mailcontrol.mailto;
+        res.status(200).json({                 
+        status:'success', 
+        data : {
+            alluser
+        }});
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: 'USER NEEDS TO LOGIN for put'
+        });
+    }
+};
+
+
